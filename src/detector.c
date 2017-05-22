@@ -78,7 +78,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     int count = 0;
     //while(i*imgs < N*120){
     while(get_current_batch(net) < net.max_batches){
-		if(l.random && count++%10 == 0){
+        if(l.random && count++%10 == 0){
             printf("Resizing\n");
             int dim = (rand() % 10 + 10) * 32;
             if (get_current_batch(net)+100 > net.max_batches) dim = 544;
@@ -137,14 +137,14 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
 
         i = get_current_batch(net);
         printf("%d: %f, %f avg, %f rate, %lf seconds, %d images\n", get_current_batch(net), loss, avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
-		if (i % 1000 == 0 || (i < 1000 && i % 100 == 0)) {
+        if (i % 1000 == 0 || (i < 1000 && i % 100 == 0)) {
 #ifdef GPU
-			if (ngpus != 1) sync_nets(nets, ngpus, 0);
+            if (ngpus != 1) sync_nets(nets, ngpus, 0);
 #endif
-			char buff[256];
-			sprintf(buff, "%s/%s_%d.weights", backup_directory, base, i);
-			save_weights(net, buff);
-		}
+            char buff[256];
+            sprintf(buff, "%s/%s_%d.weights", backup_directory, base, i);
+            save_weights(net, buff);
+        }
         free_data(train);
     }
 #ifdef GPU
@@ -407,7 +407,7 @@ void validate_detector_recall(char *datacfg, char *cfgfile, char *weightfile)
         find_replace(labelpath, "JPEGImages", "labels", labelpath);
         find_replace(labelpath, ".jpg", ".txt", labelpath);
         find_replace(labelpath, ".JPEG", ".txt", labelpath);
-	find_replace(labelpath, ".png", ".txt", labelpath);
+        find_replace(labelpath, ".png", ".txt", labelpath);
 
         int num_labels = 0;
         box_label *truth = read_boxes(labelpath, &num_labels);
@@ -416,16 +416,16 @@ void validate_detector_recall(char *datacfg, char *cfgfile, char *weightfile)
                 ++proposals;
             }
         }
-		for (j = 0; j < num_labels; ++j) {
-			++total;
-			box t = { truth[j].x, truth[j].y, truth[j].w, truth[j].h };
-			float best_iou = 0;
-			for (k = 0; k < l.w*l.h*l.n; ++k) {
-				float iou = box_iou(boxes[k], t);
-				if (probs[k][0] > thresh && iou > best_iou) {
-					best_iou = iou;
-				}
-			}
+        for (j = 0; j < num_labels; ++j) {
+            ++total;
+            box t = { truth[j].x, truth[j].y, truth[j].w, truth[j].h };
+            float best_iou = 0;
+            for (k = 0; k < l.w*l.h*l.n; ++k) {
+                float iou = box_iou(boxes[k], t);
+                if (probs[k][0] > thresh && iou > best_iou) {
+                    best_iou = iou;
+                }
+            }
             avg_iou += best_iou;
             if(best_iou > iou_thresh){
                 ++correct;
