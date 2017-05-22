@@ -6,6 +6,7 @@
 #include "parser.h"
 #include "box.h"
 #include "image.h"
+#include "output.h"
 #include "demo.h"
 //#include <sys/time.h>
 #include <time.h>
@@ -34,6 +35,7 @@ static image disp = {0};
 static CvCapture * cap;
 static float fps = 0;
 static float demo_thresh = 0;
+static float demo_hier_thresh = .5;
 
 static float *predictions[FRAMES];
 static int demo_index = 0;
@@ -44,9 +46,10 @@ void *fetch_in_thread(void *ptr)
 {
     in = get_image_from_stream(cap);
     if(!in.data){
+        return 0;
         error("Stream closed.");
     }
-    in_s = resize_image(in, net.w, net.h);
+    in_s = letterbox_image(in, net.w, net.h);
     return 0;
 }
 
@@ -66,15 +69,13 @@ void *detect_in_thread(void *ptr)
     if(l.type == DETECTION){
         get_detection_boxes(l, 1, 1, demo_thresh, probs, boxes, 0);
     } else if (l.type == REGION){
-        get_region_boxes(l, 1, 1, demo_thresh, probs, boxes, 0, 0);
+        get_region_boxes(l, in.w, in.h, demo_thresh, probs, boxes, 0, 0);
     } else {
         error("Last layer must produce detections\n");
     }
     if (nms > 0) do_nms(boxes, probs, l.w*l.h*l.n, l.classes, nms);
-    printf("\033[2J");
-    printf("\033[1;1H");
-    printf("\nFPS:%.1f\n",fps);
-    printf("Objects:\n\n");
+    write_to_output(STD_OUT, "FPS:%.1f\n",fps);
+    write_to_output(STD_OUT, "Objects:\n\n");
 
     images[demo_index] = det;
     det = images[(demo_index + FRAMES/2 + 1)%FRAMES];
@@ -82,6 +83,7 @@ void *detect_in_thread(void *ptr)
 
     draw_detections(det, l.w*l.h*l.n, demo_thresh, boxes, probs, demo_names, demo_alphabet, demo_classes);
 
+    clear_output();
     return 0;
 }
 
@@ -94,7 +96,7 @@ double get_wall_time()
     return (double)time.tv_sec + (double)time.tv_usec * .000001;
 }
 
-void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const char *filename, char **names, int classes, int frame_skip, char *prefix)
+void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const char *filename, char **names, int classes, int frame_skip, char *prefix, float hier_thresh)
 {
     //skip = frame_skip;
     image **alphabet = load_alphabet();
@@ -103,7 +105,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
     demo_alphabet = alphabet;
     demo_classes = classes;
     demo_thresh = thresh;
-    printf("Demo\n");
+    demo_hier_thresh = hier_thresh;
+    write_to_output(STD_ERR, "Demo\n");
     net = parse_network_cfg(cfgfile);
     if(weightfile){
         load_weights(&net, weightfile);
@@ -113,7 +116,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
     srand(2222222);
 
     if(filename){
-        printf("video file: %s\n", filename);
+        write_to_output(STD_ERR, "video file: %s\n", filename);
         cap = cvCaptureFromFile(filename);
     }else{
         cap = cvCaptureFromCAM(cam_index);
@@ -130,7 +133,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
 
     boxes = (box *)calloc(l.w*l.h*l.n, sizeof(box));
     probs = (float **)calloc(l.w*l.h*l.n, sizeof(float *));
-    for(j = 0; j < l.w*l.h*l.n; ++j) probs[j] = (float *)calloc(l.classes, sizeof(float *));
+    for(j = 0; j < l.w*l.h*l.n; ++j) probs[j] = (float *)calloc(l.classes, sizeof(float));
 
     pthread_t fetch_thread;
     pthread_t detect_thread;
@@ -190,6 +193,18 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
                 free_image(disp);
                 disp  = det;
             }
+            if(!in.data)
+            {
+                if(!prefix)
+                    show_image(disp, "Demo");
+                else
+                {
+                    char buff[256];
+                    sprintf(buff, "%s_%08d", prefix, count + 1);
+                    save_image(disp, buff);
+                }
+                break;
+            }
             det   = in;
             det_s = in_s;
         }else {
@@ -216,7 +231,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
     }
 }
 #else
-void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const char *filename, char **names, int classes, int frame_skip, char *prefix)
+void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const char *filename, char **names, int classes, int frame_skip, char *prefix, float hier_thresh)
 {
     fprintf(stderr, "Demo needs OpenCV for webcam images.\n");
 }
