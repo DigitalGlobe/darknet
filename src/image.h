@@ -8,12 +8,34 @@
 #include <math.h>
 #include "box.h"
 
+#ifndef __cplusplus
+#ifdef OPENCV
+#include "opencv2/highgui/highgui_c.h"
+#include "opencv2/imgproc/imgproc_c.h"
+#include "opencv2/core/version.hpp"
+#if CV_MAJOR_VERSION == 3
+#include "opencv2/videoio/videoio_c.h"
+#endif
+#endif
+#endif
+
 typedef struct {
     int h;
     int w;
     int c;
     float *data;
 } image;
+
+#ifndef __cplusplus
+#ifdef OPENCV
+image get_image_from_stream(CvCapture *cap);
+int fill_image_from_stream(CvCapture *cap, image im);
+image ipl_to_image(IplImage* src);
+void ipl_into_image(IplImage* src, image im);
+void flush_stream_buffer(CvCapture *cap, int n);
+void show_image_cv(image p, const char *name, IplImage *disp);
+#endif
+#endif
 
 float get_color(int c, int x, int max);
 void flip_image(image a);
@@ -26,10 +48,12 @@ void draw_detections(image im, int num, float thresh, box *boxes, float **probs,
 image image_distance(image a, image b);
 void scale_image(image m, float s);
 image crop_image(image im, int dx, int dy, int w, int h);
+image center_crop_image(image im, int w, int h);
 image random_crop_image(image im, int w, int h);
 image random_augment_image(image im, float angle, float aspect, int low, int high, int size);
 void random_distort_image(image im, float hue, float saturation, float exposure);
 image letterbox_image(image im, int w, int h);
+void letterbox_image_into(image im, int w, int h, image boxed);
 image resize_image(image im, int w, int h);
 image resize_min(image im, int min);
 image resize_max(image im, int max);
@@ -77,6 +101,7 @@ image make_random_image(int w, int h, int c);
 image make_empty_image(int w, int h, int c);
 image float_to_image(int w, int h, int c, float *data);
 image copy_image(image p);
+void copy_image_into(image src, image dest);
 image load_image(char *filename, int w, int h, int c);
 image load_image_color(char *filename, int w, int h);
 image **load_alphabet();

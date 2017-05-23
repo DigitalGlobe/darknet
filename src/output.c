@@ -19,12 +19,6 @@ void setup_file_output(const char* output_prefix)
 
 void write_to_output(OUTPUT_TYPE type, const char* format, ...)
 {
-    if (use_file == 1 && file == 0)
-    {
-        char buff[256];
-        sprintf(buff, "%s_%08d.txt", file_prefix, file_count);
-        file = fopen(buff, "w");
-    }
     va_list args;
     va_start(args, format);
     if (type == STD_ERR)
@@ -32,7 +26,15 @@ void write_to_output(OUTPUT_TYPE type, const char* format, ...)
     else if (use_file != 1)
         vfprintf(stdout, format, args);
     else
+    {
+        if (file == 0)
+        {
+            char buff[256];
+            sprintf(buff, "%s_%08d.txt", file_prefix, file_count);
+            file = fopen(buff, "w");
+        }
         vfprintf(file, format, args);
+    }
     va_end(args);
 }
 

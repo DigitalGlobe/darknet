@@ -439,7 +439,7 @@ void validate_detector_recall(char *datacfg, char *cfgfile, char *weightfile)
     }
 }
 
-void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile)
+void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen)
 {
     list *options = read_data_cfg(datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
@@ -537,6 +537,10 @@ void run_detector(int argc, char **argv)
     }
 
     int clear = find_arg(argc, argv, "-clear");
+    int fullscreen = find_arg(argc, argv, "-fullscreen");
+    int width = find_int_arg(argc, argv, "-w", 0);
+    int height = find_int_arg(argc, argv, "-h", 0);
+    int fps = find_int_arg(argc, argv, "-fps", 0);
 
     char *datacfg = argv[3];
     char *cfg = argv[4];
@@ -551,6 +555,6 @@ void run_detector(int argc, char **argv)
         int classes = option_find_int(options, "classes", 20);
         char *name_list = option_find_str(options, "names", "data/names.list");
         char **names = get_labels(name_list);
-        demo(cfg, weights, thresh, cam_index, filename, names, classes, frame_skip, prefix, hier_thresh);
+        demo(cfg, weights, thresh, cam_index, filename, names, classes, frame_skip, prefix, avg, hier_thresh, width, height, fps, fullscreen);
     }
 }
