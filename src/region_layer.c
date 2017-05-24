@@ -140,6 +140,13 @@ float tisnan(float x)
     return (x != x);
 }
 
+int entry_index(layer l, int batch, int location, int entry)
+{
+    int n =   location / (l.w*l.h);
+    int loc = location % (l.w*l.h);
+    return batch*l.outputs + n*l.w*l.h*(l.coords+l.classes+1) + entry*l.w*l.h + loc;
+}
+
 void softmax_tree(float *input, int batch, int inputs, float temp, tree *hierarchy, float *output);
 void forward_region_layer(const region_layer l, network_state state)
 {
@@ -323,6 +330,34 @@ void forward_region_layer(const region_layer l, network_state state)
 void backward_region_layer(const region_layer l, network_state state)
 {
     axpy_cpu(l.batch*l.inputs, 1, l.delta, 1, state.delta, 1);
+}
+
+void correct_region_boxes(box *boxes, int n, int w, int h, int netw, int neth, int relative)
+{
+    int i;
+    int new_w=0;
+    int new_h=0;
+    if (((float)netw/w) < ((float)neth/h)) {
+        new_w = netw;
+        new_h = (h * netw)/w;
+    } else {
+        new_h = neth;
+        new_w = (w * neth)/h;
+    }
+    for (i = 0; i < n; ++i){
+        box b = boxes[i];
+        b.x =  (b.x - (netw - new_w)/2./netw) / ((float)new_w/netw); 
+        b.y =  (b.y - (neth - new_h)/2./neth) / ((float)new_h/neth); 
+        b.w *= (float)netw/new_w;
+        b.h *= (float)neth/new_h;
+        if(!relative){
+            b.x *= w;
+            b.w *= w;
+            b.y *= h;
+            b.h *= h;
+        }
+        boxes[i] = b;
+    }
 }
 
 void get_region_boxes(layer l, int w, int h, int netw, int neth, float thresh, float **probs, box *boxes, int only_objectness, int *map, float tree_thresh, int relative)
