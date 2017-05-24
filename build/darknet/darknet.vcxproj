@@ -265,7 +265,7 @@
     <ClInclude Include="..\..\src\network.h" />
     <ClInclude Include="..\..\src\normalization_layer.h" />
     <ClInclude Include="..\..\src\option_list.h" />
-    <ClCompile Include="..\..\src\output.h" />
+    <ClInclude Include="..\..\src\output.h" />
     <ClInclude Include="..\..\src\parser.h" />
     <ClInclude Include="..\..\src\region_layer.h" />
     <ClInclude Include="..\..\src\reorg_layer.h" />
