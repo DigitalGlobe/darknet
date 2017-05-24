@@ -325,57 +325,87 @@ void backward_region_layer(const region_layer l, network_state state)
     axpy_cpu(l.batch*l.inputs, 1, l.delta, 1, state.delta, 1);
 }
 
-void get_region_boxes(layer l, int w, int h, float thresh, float **probs, box *boxes, int only_objectness, int *map)
+void get_region_boxes(layer l, int w, int h, int netw, int neth, float thresh, float **probs, box *boxes, int only_objectness, int *map, float tree_thresh, int relative)
 {
-    int i,j,n;
+    int i,j,n,z;
     float *predictions = l.output;
+    if (l.batch == 2) {
+        float *flip = l.output + l.outputs;
+        for (j = 0; j < l.h; ++j) {
+            for (i = 0; i < l.w/2; ++i) {
+                for (n = 0; n < l.n; ++n) {
+                    for(z = 0; z < l.classes + 5; ++z){
+                        int i1 = z*l.w*l.h*l.n + n*l.w*l.h + j*l.w + i;
+                        int i2 = z*l.w*l.h*l.n + n*l.w*l.h + j*l.w + (l.w - i - 1);
+                        float swap = flip[i1];
+                        flip[i1] = flip[i2];
+                        flip[i2] = swap;
+                        if(z == 0){
+                            flip[i1] = -flip[i1];
+                            flip[i2] = -flip[i2];
+                        }
+                    }
+                }
+            }
+        }
+        for(i = 0; i < l.outputs; ++i){
+            l.output[i] = (l.output[i] + flip[i])/2.;
+        }
+    }
     for (i = 0; i < l.w*l.h; ++i){
         int row = i / l.w;
         int col = i % l.w;
         for(n = 0; n < l.n; ++n){
-            int index = i*l.n + n;
-            int p_index = index * (l.classes + 5) + 4;
-            float scale = predictions[p_index];
-            if(l.classfix == -1 && scale < .5) scale = 0;
-            int box_index = index * (l.classes + 5);
-            boxes[index] = get_region_box(predictions, l.biases, n, box_index, col, row, l.w, l.h);
-            boxes[index].x *= w;
-            boxes[index].y *= h;
-            boxes[index].w *= w;
-            boxes[index].h *= h;
+            int index = n*l.w*l.h + i;
+            for(j = 0; j < l.classes; ++j){
+                probs[index][j] = 0;
+            }
+            int obj_index = entry_index(l, 0, n*l.w*l.h + i, 4);
+            int box_index = entry_index(l, 0, n*l.w*l.h + i, 0);
+            float scale = predictions[obj_index];
+            boxes[index] = get_region_box(predictions, l.biases, n, box_index, col, row, l.w, l.h, l.w*l.h);
 
-            int class_index = index * (l.classes + 5) + 5;
+            int class_index = entry_index(l, 0, n*l.w*l.h + i, 5);
             if(l.softmax_tree){
 
-                hierarchy_predictions(predictions + class_index, l.classes, l.softmax_tree, 0);
-                int found = 0;
+                hierarchy_predictions(predictions + class_index, l.classes, l.softmax_tree, 0, l.w*l.h);
                 if(map){
                     for(j = 0; j < 200; ++j){
-                        float prob = scale*predictions[class_index+map[j]];
+                        int class_index = entry_index(l, 0, n*l.w*l.h + i, 5 + map[j]);
+                        float prob = scale*predictions[class_index];
                         probs[index][j] = (prob > thresh) ? prob : 0;
                     }
                 } else {
-                    for(j = l.classes - 1; j >= 0; --j){
-                        if(!found && predictions[class_index + j] > .5){
-                            found = 1;
-                        } else {
-                            predictions[class_index + j] = 0;
-                        }
-                        float prob = predictions[class_index+j];
-                        probs[index][j] = (scale > thresh) ? prob : 0;
-                    }
+                    int j =  hierarchy_top_prediction(predictions + class_index, l.softmax_tree, tree_thresh, l.w*l.h);
+                    probs[index][j] = (scale > thresh) ? scale : 0;
+                    probs[index][l.classes] = scale;
                 }
             } else {
+                float max = 0;
                 for(j = 0; j < l.classes; ++j){
-                    float prob = scale*predictions[class_index+j];
+                    int class_index = entry_index(l, 0, n*l.w*l.h + i, 5 + j);
+                    float prob = scale*predictions[class_index];
                     probs[index][j] = (prob > thresh) ? prob : 0;
+                    if(prob > max) max = prob;
+                    // TODO REMOVE
+                    // if (j == 56 ) probs[index][j] = 0; 
+                    /*
+                       if (j != 0) probs[index][j] = 0; 
+                       int blacklist[] = {121, 497, 482, 504, 122, 518,481, 418, 542, 491, 914, 478, 120, 510,500};
+                       int bb;
+                       for (bb = 0; bb < sizeof(blacklist)/sizeof(int); ++bb){
+                       if(index == blacklist[bb]) probs[index][j] = 0;
+                       }
+                     */
                 }
+                probs[index][l.classes] = max;
             }
             if(only_objectness){
                 probs[index][0] = scale;
             }
         }
     }
+    correct_region_boxes(boxes, l.w*l.h*l.n, w, h, netw, neth, relative);
 }
 
 #ifdef GPU
